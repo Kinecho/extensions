@@ -22,6 +22,7 @@ import {
   processFirestoreSchema,
   subSelectQuery,
 } from "./schema";
+import { firestoreDocumentId } from "./udf";
 
 export function latestConsistentSnapshotSchemaView(
   datasetId: string,
@@ -122,14 +123,14 @@ export const buildLatestSchemaSnapshotViewQuery = (
   let query = `
       SELECT
         document_name,
-        document_id,
+        id,
         timestamp,
         operation${fieldNameSelectorClauses.length > 0 ? `,` : ``}
         ${fieldNameSelectorClauses}
       FROM (
         SELECT
           document_name,
-          document_id,
+          ${firestoreDocumentId(datasetId, "document_name")} as id,
           ${firstValue(`timestamp`)} AS timestamp,
           ${firstValue(`operation`)} AS operation,
           ${firstValue(`operation`)} = "DELETE" AS is_deleted${
@@ -152,6 +153,7 @@ export const buildLatestSchemaSnapshotViewQuery = (
   const groupBy = `
     GROUP BY
       document_name,
+      id,
       timestamp,
       operation${groupableExtractors.length > 0 ? `,` : ``}
       ${

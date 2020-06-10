@@ -61,13 +61,11 @@ export function buildLatestSnapshotViewQuery(
     --   event_id: The id of the event that triggered the cloud function mirrored the event.
     --   data: A raw JSON payload of the current state of the document.
     SELECT
-      document_name,
-      document_id${groupByColumns.length > 0 ? `,` : ``}
+      document_name${groupByColumns.length > 0 ? `,` : ``}
       ${groupByColumns.join(",")}
      FROM (
       SELECT
-        document_name,
-        document_id,
+        document_name,        
         ${groupByColumns
           .map(
             (columnName) =>
@@ -83,7 +81,7 @@ export function buildLatestSnapshotViewQuery(
       ORDER BY document_name, ${timestampColumnName} DESC
      )
      WHERE NOT is_deleted
-     GROUP BY document_name, document_id${
+     GROUP BY document_name${
        groupByColumns.length > 0 ? `, ` : ``
      }${groupByColumns.join(",")}`
   );

@@ -23,6 +23,7 @@ export const udfs: { [name: string]: (dataset: string) => any } = {
   firestoreNumber: firestoreNumberFunction,
   firestoreTimestamp: firestoreTimestampFunction,
   firestoreGeopoint: firestoreGeopointFunction,
+  firestoreDocumentId: firestoreDocumentIdFunction,
 };
 
 export function firestoreArray(datasetId: string, selector: string): string {
@@ -35,6 +36,15 @@ export function firestoreBoolean(datasetId: string, selector: string): string {
   return `\`${
     process.env.PROJECT_ID
   }.${datasetId}.firestoreBoolean\`(${selector})`;
+}
+
+export function firestoreDocumentId(
+  datasetId: string,
+  selector: string
+): string {
+  return `\`${
+    process.env.PROJECT_ID
+  }.${datasetId}.firestoreDocumentId\`(${selector})`;
 }
 
 export function firestoreNumber(datasetId: string, selector: string): string {
@@ -107,6 +117,22 @@ function firestoreNumberDefinition(datasetId: string): string {
       process.env.PROJECT_ID
     }.${datasetId}.firestoreNumber\`(json STRING)
     RETURNS NUMERIC AS (SAFE_CAST(json AS NUMERIC));`);
+}
+
+function firestoreDocumentIdFunction(datasetId: string): any {
+  const definition: string = firestoreDocumentIdDefinition(datasetId);
+  return {
+    query: definition,
+    useLegacySql: false,
+  };
+}
+
+function firestoreDocumentIdDefinition(datasetId: string): string {
+  return sqlFormatter.format(`
+    CREATE FUNCTION IF NOT EXISTS \`${
+      process.env.PROJECT_ID
+    }.${datasetId}.firestoreDocumentId\`(json STRING)
+    RETURNS STRING AS (SPLIT(json, "/")[ORDINAL(ARRAY_LENGTH(SPLIt(json, "/")))]);`);
 }
 
 function firestoreTimestampFunction(datasetId: string): any {
