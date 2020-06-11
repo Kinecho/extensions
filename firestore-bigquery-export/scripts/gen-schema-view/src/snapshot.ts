@@ -19,7 +19,7 @@ import {
   buildSchemaViewQuery,
   FirestoreSchema,
   latest,
-  processFirestoreSchema,
+  processFirestoreSchema, raw,
   subSelectQuery,
 } from "./schema";
 import { firestoreDocumentId } from "./udf";
@@ -27,12 +27,12 @@ import { firestoreDocumentId } from "./udf";
 export function latestConsistentSnapshotSchemaView(
   datasetId: string,
   rawTableName: string,
-  schema: FirestoreSchema
+  schema: FirestoreSchema,
 ): any {
   const result = buildLatestSchemaSnapshotViewQuery(
     datasetId,
     rawTableName,
-    schema
+    schema,
   );
   return {
     viewInfo: {
@@ -46,18 +46,22 @@ export function latestConsistentSnapshotSchemaView(
 export function buildLatestSchemaSnapshotViewQueryFromLatestView(
   datasetId: string,
   tableName: string,
-  schema: FirestoreSchema
+  schema: FirestoreSchema,
 ): any {
-  return buildSchemaViewQuery(datasetId, latest(tableName), schema);
+  const rawTableName = latest(tableName);
+  console.log("*** buildLatestSchemaSnapshotViewQueryFromLatestView Using Table Name ", rawTableName);
+  console.log("*** buildLatestSchemaSnapshotViewQueryFromLatestView Using Table Name ", raw(tableName));
+  return buildSchemaViewQuery(datasetId, rawTableName, schema);
 }
 
 export const buildLatestSchemaSnapshotViewQuery = (
   datasetId: string,
   rawTableName: string,
-  schema: FirestoreSchema
+  schema: FirestoreSchema,
 ): any => {
+  console.log("Building latest schema snapshot view query using rawTableName =", rawTableName);
   const firstValue = (selector: string) => {
-    return `FIRST_VALUE(${selector}) OVER(PARTITION BY document_name ORDER BY timestamp DESC)`;
+    return `FIRST_VALUE(${ selector }) OVER(PARTITION BY document_name ORDER BY timestamp DESC)`;
   };
   // We need to pass the dataset id into the parser so that we can call the
   // fully qualified json2array persistent user-defined function in the proper
@@ -78,19 +82,19 @@ export const buildLatestSchemaSnapshotViewQuery = (
      * Non-groupable arrays will not be included in the view.
      */
     bigQueryFields = bigQueryFields.filter(
-      (field) => field.name != `${arrayFieldName}`
+      (field) => field.name != `${ arrayFieldName }`,
     );
     bigQueryFields.push({
-      name: `${arrayFieldName}_index`,
+      name: `${ arrayFieldName }_index`,
       mode: "NULLABLE",
       type: "INTEGER",
-      description: `Index of ${arrayFieldName}_member in ${arrayFieldName}.`,
+      description: `Index of ${ arrayFieldName }_member in ${ arrayFieldName }.`,
     });
     bigQueryFields.push({
-      name: `${arrayFieldName}_member`,
+      name: `${ arrayFieldName }_member`,
       mode: "NULLABLE",
       type: "STRING",
-      description: `String representation of ${arrayFieldName}_member at index ${arrayFieldName}_index in ${arrayFieldName}.`,
+      description: `String representation of ${ arrayFieldName }_member at index ${ arrayFieldName }_index in ${ arrayFieldName }.`,
     });
   }
   /*
@@ -99,7 +103,7 @@ export const buildLatestSchemaSnapshotViewQuery = (
    */
   for (let geopointFieldName of schemaFieldGeopoints) {
     bigQueryFields = bigQueryFields.filter(
-      (field) => field.name != `${geopointFieldName}`
+      (field) => field.name != `${ geopointFieldName }`,
     );
   }
   /*
@@ -108,14 +112,14 @@ export const buildLatestSchemaSnapshotViewQuery = (
    */
   for (let timestampFieldName of schemaFieldTimestamps) {
     bigQueryFields = bigQueryFields.filter(
-      (field) => field.name != `${timestampFieldName}`
+      (field) => field.name != `${ timestampFieldName }`,
     );
   }
   const fieldNameSelectorClauses = Object.keys(schemaFieldExtractors).join(
-    ", "
+    ", ",
   );
   const fieldValueSelectorClauses = Object.values(schemaFieldExtractors).join(
-    ", "
+    ", ",
   );
   const schemaHasArrays = schemaFieldArrays.length > 0;
   const schemaHasGeopoints = schemaFieldGeopoints.length > 0;
@@ -125,19 +129,19 @@ export const buildLatestSchemaSnapshotViewQuery = (
         document_name,
         id,
         timestamp,
-        operation${fieldNameSelectorClauses.length > 0 ? `,` : ``}
-        ${fieldNameSelectorClauses}
+        operation${ fieldNameSelectorClauses.length > 0 ? `,` : `` }
+        ${ fieldNameSelectorClauses }
       FROM (
         SELECT
           document_name,
-          ${firestoreDocumentId(datasetId, "document_name")} as id,
-          ${firstValue(`timestamp`)} AS timestamp,
-          ${firstValue(`operation`)} AS operation,
-          ${firstValue(`operation`)} = "DELETE" AS is_deleted${
+          ${ firestoreDocumentId(datasetId, "document_name") } as id,
+          ${ firstValue(`timestamp`) } AS timestamp,
+          ${ firstValue(`operation`) } AS operation,
+          ${ firstValue(`operation`) } = "DELETE" AS is_deleted${
     fieldValueSelectorClauses.length > 0 ? `,` : ``
   }
-          ${fieldValueSelectorClauses}
-        FROM \`${process.env.PROJECT_ID}.${datasetId}.${rawTableName}\`
+          ${ fieldValueSelectorClauses }
+        FROM \`${ process.env.PROJECT_ID }.${ datasetId }.${ rawTableName }\`
       )
       WHERE NOT is_deleted
   `;
@@ -145,7 +149,7 @@ export const buildLatestSchemaSnapshotViewQuery = (
     (name) =>
       schemaFieldArrays.indexOf(name) === -1 &&
       schemaFieldGeopoints.indexOf(name) === -1 &&
-      schemaFieldTimestamps.indexOf(name) === -1
+      schemaFieldTimestamps.indexOf(name) === -1,
   );
   const hasNonGroupableFields =
     schemaHasArrays || schemaHasGeopoints || schemaHasTimestamps;
@@ -155,61 +159,61 @@ export const buildLatestSchemaSnapshotViewQuery = (
       document_name,
       id,
       timestamp,
-      operation${groupableExtractors.length > 0 ? `,` : ``}
+      operation${ groupableExtractors.length > 0 ? `,` : `` }
       ${
-        groupableExtractors.length > 0
-          ? `${groupableExtractors.join(`, `)}`
-          : ``
-      }
+    groupableExtractors.length > 0
+      ? `${ groupableExtractors.join(`, `) }`
+      : ``
+  }
   `;
   if (hasNonGroupableFields) {
     query = `
-        ${subSelectQuery(
-          query,
-          /*except=*/ schemaFieldArrays
-            .concat(schemaFieldGeopoints)
-            .concat(schemaFieldTimestamps)
-        )}
-        ${rawTableName}
-        ${schemaFieldArrays
-          .map(
-            (
-              arrayFieldName
-            ) => `CROSS JOIN UNNEST(${rawTableName}.${arrayFieldName})
-            AS ${arrayFieldName}_member
-            WITH OFFSET ${arrayFieldName}_index`
-          )
-          .join(" ")}
+        ${ subSelectQuery(
+      query,
+      /*except=*/ schemaFieldArrays
+        .concat(schemaFieldGeopoints),
+        // .concat(schemaFieldTimestamps),
+    ) }
+        ${ rawTableName }
+        ${ schemaFieldArrays
+      .map(
+        (
+          arrayFieldName,
+        ) => `CROSS JOIN UNNEST(${ rawTableName }.${ arrayFieldName })
+            AS ${ arrayFieldName }_member
+            WITH OFFSET ${ arrayFieldName }_index`,
+      )
+      .join(" ") }
       `;
     query = `
-        ${query}
-        ${groupBy}
+        ${ query }
+        ${ groupBy }
         ${
-          schemaHasArrays
-            ? `, ${schemaFieldArrays
-                .map((name) => `${name}_index, ${name}_member`)
-                .join(", ")}`
-            : ``
-        }
+      schemaHasArrays
+        ? `, ${ schemaFieldArrays
+          .map((name) => `${ name }_index, ${ name }_member`)
+          .join(", ") }`
+        : ``
+    }
         ${
-          schemaHasGeopoints
-            ? `, ${schemaFieldGeopoints
-                .map((name) => `${name}_latitude, ${name}_longitude`)
-                .join(", ")}`
-            : ``
-        }
+      schemaHasGeopoints
+        ? `, ${ schemaFieldGeopoints
+          .map((name) => `${ name }_latitude, ${ name }_longitude`)
+          .join(", ") }`
+        : ``
+    }
         ${
-          schemaHasTimestamps
-            ? `, ${schemaFieldTimestamps
-                .map((name) => `${name}_seconds, ${name}_nanoseconds`)
-                .join(", ")}`
-            : ``
-        }
+      schemaHasTimestamps
+        ? `, ${ schemaFieldTimestamps
+          .map((name) => `${ name }_seconds, ${ name }_nanoseconds`)
+          .join(", ") }`
+        : ``
+    }
       `;
   } else {
     query = `
-      ${query}
-      ${groupBy}
+      ${ query }
+      ${ groupBy }
     `;
   }
   query = sqlFormatter.format(`
@@ -220,7 +224,7 @@ export const buildLatestSchemaSnapshotViewQuery = (
     --   event_id: The event that wrote this row.
     --   <schema-fields>: This can be one, many, or no typed-columns
     --                    corresponding to fields defined in the schema.
-    ${query}
+    ${ query }
   `);
   return { query: query, fields: bigQueryFields };
 };

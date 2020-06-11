@@ -110,7 +110,7 @@ export class FirestoreBigQuerySchemaViewFactory {
     const changeLogSchemaViewName = changeLog(
       schema(tableNamePrefix, schemaName),
     );
-    const latestSchemaViewName = latest(schema(tableNamePrefix, schemaName));
+    const latestSchemaViewName = schema(tableNamePrefix, schemaName);
     const dataset = this.bq.dataset(datasetId);
 
     const udfNames = Object.keys(udfs);
@@ -145,7 +145,7 @@ export class FirestoreBigQuerySchemaViewFactory {
 
     console.info(
       `\n\n****Big Query Fields\n `,
-      JSON.stringify(bigQueryFields, null, 2),
+      JSON.stringify(bigQueryFields),
     );
 
     const changelogOptions = {
@@ -178,7 +178,7 @@ export class FirestoreBigQuerySchemaViewFactory {
       );
       throw error;
     }
-
+    console.log("LatestRawViewName", latestRawViewName);
     result = latestConsistentSnapshotSchemaView(
       datasetId,
       latestRawViewName,
@@ -238,10 +238,7 @@ function decorateSchemaWithChangelogFields(schema: any): any {
     }
     decorated.fields.push(changelogSchemaFields[i]);
   }
-  console.log(
-    "\n\nDecorated change log fields",
-    JSON.stringify(decorated, null, 2),
-  );
+
   return decorated;
 }
 
@@ -439,9 +436,9 @@ function processFirestoreSchemaHelper(
       geopoints.push(qualifyFieldName(prefix, field.name));
     }
 
-    if (field.type === "timestamp") {
-      timestamps.push(qualifyFieldName(prefix, field.name));
-    }
+    // if (field.type === "timestamp") {
+    //   timestamps.push(qualifyFieldName(prefix, field.name));
+    // }
   });
 }
 
@@ -494,6 +491,7 @@ const processLeafField = (
       );
       break;
     case "timestamp":
+      const ts = firestoreTimestamp(datasetId, dataFieldName);
       const seconds = jsonExtractScalar(
         dataFieldName,
         extractPrefix,
