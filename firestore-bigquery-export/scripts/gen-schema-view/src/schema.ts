@@ -153,17 +153,23 @@ export class FirestoreBigQuerySchemaViewFactory {
       view: result.viewInfo,
     };
 
-    if (!changeLogSchemaViewExists) {
-      logs.bigQuerySchemaViewCreating(
-        changeLogSchemaViewName,
-        firestoreSchema,
-        result.viewInfo.query,
-      );
-      await changeLogSchemaView.create(changelogOptions);
-      logs.bigQuerySchemaViewCreated(changeLogSchemaViewName);
-    } else {
-      console.log("Change Log View already exists, not creating it");
+    console.log(`\n\n*** Change Log Options ${ JSON.stringify(changelogOptions, null, 2) }`);
+
+    if (changeLogSchemaViewExists) {
+      console.log("Deleting change log view so we can recreate it");
+      await changeLogSchemaView.delete();
+      console.log("Change log schema view was deleted");
     }
+
+    //if it had existed, we deleted it, so we can just create it again
+    logs.bigQuerySchemaViewCreating(
+      changeLogSchemaViewName,
+      firestoreSchema,
+      result.viewInfo.query,
+    );
+    await changeLogSchemaView.create(changelogOptions);
+    logs.bigQuerySchemaViewCreated(changeLogSchemaViewName);
+
 
     try {
       await changeLogSchemaView.setMetadata({
@@ -195,15 +201,20 @@ export class FirestoreBigQuerySchemaViewFactory {
       friendlyName: latestSchemaViewName,
       view: result.viewInfo,
     };
-    if (!latestSchemaViewExists) {
-      logs.bigQuerySchemaViewCreating(
-        latestSchemaViewName,
-        firestoreSchema,
-        result.viewInfo.query,
-      );
-      await latestSchemaView.create(latestOptions);
-      logs.bigQueryViewCreated(latestSchemaViewName);
+
+    if (latestSchemaViewExists) {
+      console.log("Latest schema view exists... deleting it so we can recreate it");
+      await latestSchemaView.delete();
+      console.log("Successfully deieted the view");
     }
+
+    logs.bigQuerySchemaViewCreating(
+      latestSchemaViewName,
+      firestoreSchema,
+      result.viewInfo.query,
+    );
+    await latestSchemaView.create(latestOptions);
+    logs.bigQueryViewCreated(latestSchemaViewName);
     await latestSchemaView.setMetadata({
       schema: decorateSchemaWithChangelogFields({
         fields: bigQueryFields,
